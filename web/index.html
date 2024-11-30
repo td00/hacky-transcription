@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Subtitles</title>
+    <style>
+        @font-face {
+            font-family: 'OpenDyslexic';
+            src: url('/OpenDyslexic3-Regular.ttf') format('truetype');
+        }
+        body {
+            font-family: OpenDyslexic;
+            background-color: #f4f4f9;
+            color: #333;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .container {
+            text-align: center;
+        }
+        .subtitle {
+            font-size: 24px;
+            padding: 20px;
+            border: 2px solid #ccc;
+            border-radius: 10px;
+            background-color: #fff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="subtitle" class="subtitle">Waiting for Subtitles...</div>
+    </div>
+    <script>
+        const subtitleDiv = document.getElementById("subtitle");
+        const socket = new WebSocket("ws://127.0.0.1:1234");
+
+        socket.onopen = function() {
+            console.log("Connected.");
+        };
+
+        socket.onmessage = function(event) {
+            try {
+                const data = JSON.parse(event.data);
+                subtitleDiv.textContent = data.text || "Hearing...";
+            } catch (error) {
+                console.error("Error:", error);
+            }
+        };
+
+        socket.onclose = function() {
+            subtitleDiv.textContent = "Disconnected.";
+            console.log("WebSocket died.");
+        };
+
+        socket.onerror = function() {
+            subtitleDiv.textContent = "Error Connecting.";
+            console.log("WebSocket Error.");
+        };
+    </script>
+</body>
+</html>
