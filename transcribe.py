@@ -6,47 +6,81 @@ from websocket_server import WebsocketServer
 from vosk import Model, KaldiRecognizer
 import json
 
-SAMPLE_RATE = 16000 ## switch to 8000 for large model
-MODEL_PATH = "small"
-PORT = 1234
+import sys
+import os
 
-if not os.path.exists(MODEL_PATH):
-    print(f"Error: Path '{MODEL_PATH}' not found!")
-    exit(1)
-
-model = Model(MODEL_PATH)
-recognizer = KaldiRecognizer(model, SAMPLE_RATE)
-audio_queue = queue.Queue()
+__DEBUG_LOGS = "DEBUG_LOGS" in os.environ
 
 def audio_callback(indata, frames, time, status):
     if status:
         print(f"Error: Audio Error: {status}")
     audio_queue.put(indata.copy())
 
-def transcribe_audio(server):
-    with sd.InputStream(samplerate=SAMPLE_RATE, channels=1, dtype="int16", callback=audio_callback):
-    #with sd.InputStream(samplerate=SAMPLE_RATE, channels=1, dtype="int16", callback=audio_callback, blocksize=8000): ## needed for large model
-        print("Starting...")
+def transcribe_audio(server, recognizer, audio_queue, samplerate, blocksize):
+    with sd.InputStream(samplerate=sample_rate, channels=1, dtype="int16", callback=audio_callback, blocksize=blocksize):
+        if __DEBUG_LOGS:
+            print("Starting...")
+
         while True:
             data = audio_queue.get()
             if recognizer.AcceptWaveform(data.tobytes()):
                 result = json.loads(recognizer.Result())
-                print(f"Transcribed: {result['text']}") #debug-console
-                server.send_message_to_all(json.dumps({"text": result["text"]}))
+                server.send_message_to_all(json.dumps({"text": result["text"], "partial": False}))
+
+                if __DEBUG_LOGS:
+                    print(f"Transcribed: {result['text']}")
             else:
                 partial = json.loads(recognizer.PartialResult())
-                print(f"Transcribing: {partial['partial']}") #debug-console
-                server.send_message_to_all(json.dumps({"text": partial["partial"]}))
+                server.send_message_to_all(json.dumps({"text": partial["partial"], "partial": True}))
+
+                if __DEBUG_LOGS:
+                    print(f"Transcribing: {partial['partial']}")
 
 def new_client(client, server):
-    print(f"New Websocket Client: {client['id']}")
+    if __DEBUG_LOGS:
+        print(f"New Websocket Client: {client['id']}")
 
-server = WebsocketServer(host="0.0.0.0", port=PORT)
-server.set_fn_new_client(new_client)
+def __exit_usage():
+    print("Usage: transcribe.py {small|large} {model_path}", file=sys.stderr)
+    sys.exit(1)
 
-thread = threading.Thread(target=transcribe_audio, args=(server,))
-thread.daemon = True
-thread.start()
+if __name__ == "__main__":
+    if len(sys.argv) != 3:
+        __exit_usage()
 
-print(f"Websocket Running ws://0.0.0.0:{PORT}")
-server.run_forever()
+    if sys.argv[1] in ("help", "-h", "--help"):
+        __exit_usage()
+
+    model = sys.argv[1]
+
+    if model not in ("small", "large"):
+        printf(f"Invalid model: {model}", file=sys.stderr)
+        __exit_usage()
+
+    model_path = sys.argv[2]
+
+    if not os.path.exists(model_path):
+        printf(f"Model not found: {model_path}", file=sys.stderr)
+        __exit_usage()
+
+    if model == "small":
+        sample_rate = 16000
+        blocksize = None
+    else:
+        sample_rate = 8000
+        blocksize = 8000
+
+    model = Model(model_path)
+    recognizer = KaldiRecognizer(model, sample_rate)
+    audio_queue = queue.Queue()
+
+    port = 1234
+    server = WebsocketServer(host="0.0.0.0", port=port)
+    server.set_fn_new_client(new_client)
+
+    thread = threading.Thread(target=transcribe_audio, args=(server, recognizer, audio_queue, sample_rate, blocksize))
+    thread.daemon = True
+    thread.start()
+
+    print(f"Websocket Running ws://0.0.0.0:{port}")
+    server.run_forever()
