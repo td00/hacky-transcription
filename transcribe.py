@@ -17,8 +17,6 @@ def audio_callback(indata, frames, time, status):
     audio_queue.put(indata.copy())
 
 def transcribe_audio(server, recognizer, audio_queue, samplerate, blocksize):
-    prev_text = None
-
     with sd.InputStream(samplerate=sample_rate, channels=1, dtype="int16", callback=audio_callback, blocksize=blocksize):
         if __DEBUG_LOGS:
             print("Starting...")
@@ -27,17 +25,16 @@ def transcribe_audio(server, recognizer, audio_queue, samplerate, blocksize):
             data = audio_queue.get()
             if recognizer.AcceptWaveform(data.tobytes()):
                 result = json.loads(recognizer.Result())
-                server.send_message_to_all(json.dumps({"text": result["text"], "prev_text": prev_text}))
-                prev_text = result["text"]
+                server.send_message_to_all(json.dumps({"text": result["text"], "partial": False}))
 
                 if __DEBUG_LOGS:
-                    print(f"Transcribed: {result['text']}") #debug-console
+                    print(f"Transcribed: {result['text']}")
             else:
                 partial = json.loads(recognizer.PartialResult())
-                server.send_message_to_all(json.dumps({"text": partial["partial"], "prev_text": prev_text}))
+                server.send_message_to_all(json.dumps({"text": partial["partial"], "partial": True}))
 
                 if __DEBUG_LOGS:
-                    print(f"Transcribing: {partial['partial']}") #debug-console
+                    print(f"Transcribing: {partial['partial']}")
 
 def new_client(client, server):
     if __DEBUG_LOGS:

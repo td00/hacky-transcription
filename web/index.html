@@ -15,31 +15,31 @@
             color: #333;
             display: flex;
             align-items: center;
+            flex-direction: column;
+            gap: 0.5rem;
             justify-content: center;
             height: 100vh;
             margin: 0;
         }
-        .container {
-            text-align: center;
-        }
         .subtitle {
+            text-align: center;
             font-size: 24px;
             padding: 20px;
             border: 2px solid #ccc;
             border-radius: 10px;
             background-color: #fff;
+            width: fit-content;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div id="prev_subtitle" class="subtitle"></div>
-        <div id="subtitle" class="subtitle">Waiting for Subtitles...</div>
-    </div>
+    <div id="prev_subtitle" class="subtitle"></div>
+    <div id="subtitle" class="subtitle">Waiting for Subtitles...</div>
     <script>
-        const prevSubtitleDiv = document.getElementById("subtitle");
+        const prevSubtitleDiv = document.getElementById("prev_subtitle");
         const subtitleDiv = document.getElementById("subtitle");
         const socket = new WebSocket("ws://127.0.0.1:1234");
+        let currText = "Waiting for Subtitles...";
 
         socket.onopen = function() {
             console.log("Connected.");
@@ -48,8 +48,13 @@
         socket.onmessage = function(event) {
             try {
                 const data = JSON.parse(event.data);
-                prevSubtitleDiv.textContent = data.prev_text || "";
-                subtitleDiv.textContent = data.text || "Hearing...";
+
+                if (!data.partial) {
+                    prevSubtitleDiv.textContent = currText;
+                }
+
+                currText = data.text;
+                subtitleDiv.textContent = currText || "Hearing...";
             } catch (error) {
                 console.error("Error:", error);
             }
